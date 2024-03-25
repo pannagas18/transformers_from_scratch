@@ -24,6 +24,7 @@ class Transformer(torch.nn.Module):
     encoder_seq_L = encoder_input_ids.shape[-1]
     encoder_output = self.encoder(encoder_input_ids, encoder_attn_mask, encoder_seq_L)
     decoder_output = self.decoder(decoder_input_ids, encoder_output, encoder_attn_mask, decoder_attn_mask)
-    output_probabilities = F.softmax(self.linear(decoder_output), dim=-1)
+    # output_probabilities = F.softmax(self.linear(decoder_output), dim=-1)
+    unnormalized_output_probabilities = self.linear(decoder_output)
 
-    return output_probabilities
+    return unnormalized_output_probabilities
