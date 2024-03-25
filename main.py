@@ -48,6 +48,8 @@ def train(epoch, transformer, encoder_dataloader, decoder_dataloader, optimizer,
 
             # remove the </s> (tokeninzer idx = 2) from the decoder input_ids
             decoder_input["input_ids"] = decoder_input["input_ids"][decoder_input["input_ids"]!=2].view(decoder_input["input_ids"].shape[0],-1) # b, decoder_seq_L
+
+            optimizer.zero_grad()
             
             output_logits = transformer(encoder_input, decoder_input)
 
@@ -56,7 +58,6 @@ def train(epoch, transformer, encoder_dataloader, decoder_dataloader, optimizer,
             loss_with_pad = loss_fn(loss_outputs, target_ids) * target_padding_mask # reduction="none"
             loss = loss_with_pad[(target_padding_mask==1)].mean()
 
-            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
