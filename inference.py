@@ -10,8 +10,8 @@ config_parser = ConfigParser()
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-MODEL_SAVE_PATH = "YOUR/MODEL/PATH"
-CONFIG_SAVE_PATH = "YOUR/CONFIG/PATH"
+MODEL_SAVE_PATH = "model_weights/ckpt_epoch3_steps3000"
+CONFIG_SAVE_PATH = "model_weights/tfs_model0_config.ini"
 
 # printing options
 class color:
@@ -51,7 +51,7 @@ def inference():
     config = InferenceConfig(batch, d_model, vocab, n_heads, hidden_dim, n_layers, DEVICE)
     # print(config.__dict__)
 
-    # input = "Opportunity, also known as MER-B or MER-1, is a robotic rover that was active on Mars from 2004 until 2018. Opportunity was operational on Mars for 5111 sols."
+    # _input = "Opportunity, also known as MER-B or MER-1, is a robotic rover that was active on Mars from 2004 until 2018. Opportunity was operational on Mars for 5111 sols."
     _input = input("Enter the input article to be summarized:\n")
 
     os.system("clear" if os.name == 'posix' else 'cls')
@@ -72,7 +72,7 @@ def inference():
     inference_decoder_input = {k:v.to(DEVICE) for k,v in inference_decoder_input.items()}
     
     transformer_inference = Transformer(config)
-    transformer_inference.load_state_dict(torch.load(MODEL_SAVE_PATH))
+    transformer_inference.load_state_dict(torch.load(MODEL_SAVE_PATH, map_location=torch.device('cpu')))
     transformer_inference.eval()
 
     inference_preds = None
@@ -86,7 +86,7 @@ def inference():
             inference_decoder_input = {"input_ids":torch.cat((inference_decoder_input["input_ids"], inference_preds), dim=-1),
                                     "attention_mask":torch.ones(inference_decoder_input["input_ids"].shape[0]+1)}
 
-            generated_sequence = tokenizer.decode(inference_decoder_input["input_ids"], skip_special_tokens=True)
+            generated_sequence = tokenizer.decode(inference_decoder_input["input_ids"], skip_special_tokens=False)
 
             # sys.stdout.write("\r" + generated_sequence)
             # sys.stdout.flush()
