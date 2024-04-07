@@ -72,7 +72,7 @@ def inference():
     inference_decoder_input = {k:v.to(DEVICE) for k,v in inference_decoder_input.items()}
     
     transformer_inference = Transformer(config)
-    transformer_inference.load_state_dict(torch.load(MODEL_SAVE_PATH, map_location=torch.device('cpu')))
+    transformer_inference.load_state_dict(torch.load(MODEL_SAVE_PATH, map_location=torch.device(DEVICE)))
     transformer_inference.eval()
 
     inference_preds = None

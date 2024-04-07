@@ -26,7 +26,7 @@ class Config:
     self.n_layers = n_layers
     self.DEVICE = DEVICE
 
-def train(epoch, transformer, encoder_dataloader, decoder_dataloader, optimizer, loss_fn, DEVICE, writer):
+def train(epoch, transformer, encoder_dataloader, decoder_dataloader, optimizer, loss_fn, DEVICE, ckpt_model_name, writer):
 
     print("training...")
     transformer.train()
@@ -57,18 +57,19 @@ def train(epoch, transformer, encoder_dataloader, decoder_dataloader, optimizer,
             loss_outputs = output_logits.permute(0,2,1)
             loss_with_pad = loss_fn(loss_outputs, target_ids) * target_padding_mask # reduction="none"
             loss = loss_with_pad[(target_padding_mask==1)].mean()
-
+            
             loss.backward()
             optimizer.step()
 
             tepoch.set_postfix({"Loss": loss.item()})
             # tepoch.update(1)
             
-            # todo; create checkpoints during training
-            if batch_idx%500 == 0:
-                writer.add_scalar("Loss/train", avg_train_loss.item()/(batch_idx+1), epoch)
-
             avg_train_loss += loss
+            
+            # todo; create checkpoints during training -> done
+            if batch_idx%3500 == 0:
+                # writer.add_scalar("Loss/train", avg_train_loss.item()/(batch_idx+1), epoch)
+                torch.save(transformer.state_dict(), f"""training_ckpts/{ckpt_model_name}_ckpt_epoch{epoch}_steps{batch_idx}""")
 
     avg_train_loss /= len(encoder_dataloader)
     print("\nAVG TRAIN LOSS:", avg_train_loss.item(), "\n")
@@ -110,16 +111,16 @@ def validation(epoch, transformer, encoder_dataloader, decoder_dataloader, loss_
 
                 avg_validation_loss += loss
 
-    avg_validation_loss /= len(encoder_dataloader)
-    if avg_validation_loss < best_validation_loss:
-        print("\n\nsaving best model...")
-        torch.save(transformer.state_dict(), MODEL_SAVE_PATH+f"{epoch}")
-        best_validation_loss = avg_validation_loss
+        avg_validation_loss /= len(encoder_dataloader)
+        if avg_validation_loss < best_validation_loss:
+            print("\n\nsaving best model...")
+            torch.save(transformer.state_dict(), MODEL_SAVE_PATH+f"epoch_{epoch}")
+            best_validation_loss = avg_validation_loss
 
-    print("AVG VALIDATION LOSS:", avg_validation_loss.item())
-    print("BEST VALIDATION LOSS:", best_validation_loss.item(), "\n")
+        print("AVG VALIDATION LOSS:", avg_validation_loss.item())
+        print("BEST VALIDATION LOSS:", best_validation_loss.item(), "\n")
 
-    writer.add_scalar("Loss/test", avg_validation_loss, epoch)
+        writer.add_scalar("Loss/test", avg_validation_loss, epoch)
 
     return best_validation_loss
 
@@ -140,6 +141,7 @@ def main():
     # print(config.__dict__)
     
     folder_path = args.model_save_path.split('/')[0]
+    Path("training_ckpts").mkdir(parents=True, exist_ok=True)
     Path(folder_path).mkdir(parents=True, exist_ok=True)
 
     time = datetime.datetime.now().strftime("%d_%m_%Y_%H-%M-%S")
@@ -163,28 +165,30 @@ def main():
 
     dataset_name, dataset_version = "cnn_dailymail", "1.0.0"
 
-    dataset_article, dataset_highlights = TransformerDataset(config=config,
+    train_dataset_article, train_dataset_highlights, validation_dataset_article, validation_dataset_highlights, test_dataset_article, test_dataset_highlights = TransformerDataset(config=config,
                                                             dataset_name=dataset_name,
                                                             dataset_version=dataset_version).get_dataset()
 
-    encoder_train_dataloader = DataLoader(dataset_article["train"], batch_size=config.batch)
-    decoder_train_dataloader = DataLoader(dataset_highlights["train"], batch_size=config.batch)
+    encoder_train_dataloader = DataLoader(train_dataset_article, batch_size=config.batch, drop_last=True)
+    decoder_train_dataloader = DataLoader(train_dataset_highlights, batch_size=config.batch, drop_last=True)
 
-    encoder_validation_dataloader = DataLoader(dataset_article["validation"], batch_size=config.batch)
-    decoder_validation_dataloader = DataLoader(dataset_highlights["validation"], batch_size=config.batch)
+    encoder_validation_dataloader = DataLoader(validation_dataset_article, batch_size=config.batch, drop_last=True)
+    decoder_validation_dataloader = DataLoader(validation_dataset_highlights, batch_size=config.batch, drop_last=True)
 
-    # encoder_test_dataloader = DataLoader(dataset_article["test"], batch_size=config.batch)
-    # decoder_test_dataloader = DataLoader(dataset_highlights["test"], batch_size=config.batch)
+    # encoder_test_dataloader = DataLoader(test_dataset_article, batch_size=config.batch, drop_last=True)
+    # decoder_test_dataloader = DataLoader(test_dataset_highlights, batch_size=config.batch, drop_last=True)
 
     transformer = Transformer(config)
+    # load model from a training checkpoint
+    # transformer.load_state_dict(torch.load(r"training_ckpts\tfs_model0_ckpt_epoch1_steps14000", map_location=torch.device(DEVICE)))
 
     loss_fn = torch.nn.CrossEntropyLoss(reduction="none")
     optimizer = torch.optim.AdamW(transformer.parameters(), lr=1e-4)
 
-    EPOCH = 1
+    EPOCH = 5
     best_validation_loss = float('inf') # validation loss
     for epoch in range(1, EPOCH+1):
-        train(epoch, transformer, encoder_train_dataloader, decoder_train_dataloader, optimizer, loss_fn, DEVICE, writer)
+        train(epoch, transformer, encoder_train_dataloader, decoder_train_dataloader, optimizer, loss_fn, DEVICE, f"{match.group(1)}" if match else "model", writer)
         best_validation_loss = validation(epoch, transformer, encoder_validation_dataloader, decoder_validation_dataloader, loss_fn, best_validation_loss, DEVICE, args.model_save_path, writer)
     writer.flush()
 
